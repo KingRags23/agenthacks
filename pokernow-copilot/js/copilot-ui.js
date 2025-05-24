@@ -23,7 +23,8 @@ class CopilotUI {
             content: null,
             advice: null,
             gameInfo: null,
-            toggleButton: null
+            toggleButton: null,
+            chatbot: null
         };
         
         this.animations = {
@@ -206,9 +207,23 @@ class CopilotUI {
             </div>
         `;
 
+        // --- Claude Chatbot Section ---
+        this.ui.chatbot = document.createElement('div');
+        this.ui.chatbot.className = 'copilot-chatbot';
+        this.ui.chatbot.innerHTML = `
+            <div class="chatbot-header" style="font-weight:600;color:#4CAF50;padding:8px 12px;">💬 Chat with Claude</div>
+            <div class="chatbot-body" style="display:flex;flex-direction:column;height:200px;background:#1e232f;border-radius:0 0 8px 8px;padding:10px 8px 8px 8px;">
+                <div class="chat-messages" style="flex:1;overflow-y:auto;margin-bottom:8px;"></div>
+                <div class="chat-input-row" style="display:flex;gap:8px;">
+                    <input type="text" class="chat-input" placeholder="Ask about this hand..." style="flex:1;padding:8px 12px;border-radius:6px;border:1px solid #333;background:#232b3a;color:#fff;">
+                </div>
+            </div>
+        `;
+
         // Assemble the UI
         this.ui.content.appendChild(this.ui.gameInfo);
         this.ui.content.appendChild(this.ui.advice);
+        this.ui.content.appendChild(this.ui.chatbot);
         this.ui.container.appendChild(this.ui.header);
         this.ui.container.appendChild(this.ui.content);
 
@@ -315,6 +330,53 @@ class CopilotUI {
                 this.toggle();
             }
         });
+
+        // --- Chatbot Logic ---
+        const chatMessages = this.ui.chatbot.querySelector('.chat-messages');
+        const chatInput = this.ui.chatbot.querySelector('.chat-input');
+
+        // Send message on Enter
+        chatInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendChatMessage();
+            }
+        });
+
+        // Chat message logic
+        const addChatMessage = (text, sender) => {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = sender === 'user' ? 'chat-msg user' : 'chat-msg bot';
+            msgDiv.style.margin = '4px 0';
+            msgDiv.style.padding = '7px 12px';
+            msgDiv.style.borderRadius = '12px';
+            msgDiv.style.maxWidth = '80%';
+            msgDiv.style.background = sender === 'user' ? '#4CAF50' : '#232b3a';
+            msgDiv.style.color = sender === 'user' ? '#fff' : '#e0e0e0';
+            msgDiv.style.alignSelf = sender === 'user' ? 'flex-end' : 'flex-start';
+            msgDiv.textContent = text;
+            chatMessages.appendChild(msgDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        };
+
+        const sendChatMessage = async () => {
+            const message = chatInput.value.trim();
+            if (!message) return;
+            addChatMessage(message, 'user');
+            chatInput.value = '';
+            // Get current game context
+            const gameState = this.parser.getGameState ? this.parser.getGameState() : {};
+            try {
+                const res = await fetch('http://localhost:8000/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message, gameState })
+                });
+                const data = await res.json();
+                addChatMessage(data.response || 'No response from Claude.', 'bot');
+            } catch (err) {
+                addChatMessage('Error: Could not reach Claude. Is the backend running?', 'bot');
+            }
+        };
     }
 
     /**
